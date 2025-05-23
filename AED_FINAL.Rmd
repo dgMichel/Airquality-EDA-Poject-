@@ -1,0 +1,296 @@
+---
+title: "Trabajo Final - Análisis Exploratorio de Datos"
+author: "Mariam Parra Cárdenas,    
+David Michel García Batista,   
+Kevin Corbo González,   
+Luis Manuel Notario Pérez"
+date: "Mayo-2025"
+output:
+  html_document: 
+      code_folding: hide 
+  pdf_document: default
+---
+
+### Introducción
+
+>El conjunto de datos `airquality`, disponible en el entorno estadístico **R Studio**, contiene observaciones diarias de variables desde el 1ro de Mayo hasta el 30 de Septiembre,1973, relacionadas con la calidad del aire y condiciones meteorológicas. Las variables registradas incluyen:
+-Ozone: Ozono medio en partes por mil millones entre las 13.00 y las 15.00 horas en Roosevelt Island
+-Solar.R: Radiación solar en Langleys en la banda de frecuencia 4000–7700 Angstroms de 08:00 a 12:00 horas en Central Park
+-Wind: Velocidad media del viento en millas por hora a las 07:00 y a las 10:00 horas en el Aeropuerto LaGuardia
+-Temp: Temperatura máxima diaria en grados Fahrenheit en el Aeropuerto LaGuardia.
+
+>Este trabajo tiene como objetivo aplicar un **análisis exploratorio de datos (AED)** exhaustivo, que permita descubrir patrones relevantes, relaciones entre variables y fenómenos no evidentes a primera vista. Lejos de limitarse a una descripción superficial, este enfoque busca:
+
+>1.**Comprender la estructura interna del dataset**, evaluando la distribución, presencia de outliers, sesgos y comportamientos atípicos en cada variable.  
+2. **Detectar interacciones ambientales** entre los distintos factores meteorológicos y de contaminación, como la posible influencia de la radiación solar o el viento sobre los niveles de ozono.  
+3. **Identificar patrones complejos**, como la bimodalidad o agrupamientos estacionales, que solo emergen mediante una visualización y análisis cuidadoso. 
+Esto nos permitirá construir **hipótesis sólidas a partir de datos brutos** aprovechando herramientas como histogramas, boxplots y medidas de resumen (medianas, percentiles, IQR) para interpretar adecuadamente fenómenos ambientales.
+
+## Carga de bibliotecas necesarias
+
+```{r}
+library(graphics)
+library(ggplot2)
+library(dplyr)
+library(tidyr)
+library(GGally)
+library(psych)
+library(ggpubr)
+library(gridExtra)
+library(openair)
+```
+
+> Se cargan las bibliotecas que se usarán para el análisis, la limpieza, y la visualización de datos.
+
+--- 
+
+
+## Carga y exploración inicial de la base de datos
+
+> Se utiliza el dataset `airquality` incluido en R para construir el dataframe (df). Se revisa su estructura general, cantidad de filas y columnas, valores faltantes, estadísticas básicas y matriz de correlación inicial.
+Observamos la presencia de valores NA en las variables Ozone y Solar.R. Procedemos a eliminar las filas con valores ausentes para trabajar solo con observaciones completas. Luego se repite la exploración básica para ver los cambios.
+
+```{r}
+df <- datasets::airquality
+dim(df)
+str(df)
+sum(is.na(df))
+summary(df)
+cor(df)
+```
+
+
+---
+
+## Limpieza de datos: eliminación de valores faltantes (NA)
+
+```{r}
+df <- df %>%
+  drop_na()
+
+dim(df)  
+str(df)  
+summary(df)
+cor(df)
+```
+> Podemos apreciar el cambio de los valores, entre ellos notamos como ahora aparece una correlación prácticamente fuerte entre las variables Ozone y Temp. Más adelante trabajaremos esto
+
+---
+
+## Construcción de histogramas para las primeras cuatro variables
+>Comenazaremos el análisis del dataframe mediante la utilización de histogramas con el objetivo de:
+-Explorar la distribución de cada variable (¿es simétrica, sesgada, bimodal?).
+-Identificar valores atípicos (colas largas o barras aisladas).
+-Verificar supuestos de normalidad o necesidad de transformaciones.
+
+```{r}
+datos <- df[, 1:4] #lista para contener las 4 primeras columnas df
+
+#Función anónima para ajustar el número de barras segun la regla de Sturges
+nclass.Sturges <- function(x) { 
+  ceiling(log2(length(na.omit(x))) + 1)
+}
+
+plots <- list() #lista para guardar los histogramas
+
+#ciclo para ir tomando cada columna y guardar el nombre de la variable en col_name y el contenido en col_data
+for (i in 1:ncol(datos)) {
+  col_name <- names(datos)[i]
+  col_data <- datos[[col_name]]  
+  #el nombre lo explica solo :) 
+  numbarras <- pretty(range(col_data), 
+                      n = nclass.Sturges(col_data), 
+                      min.n = 1)
+  #construye cada histograma y lo guarda dentro de plots en la posición i
+  plots[[i]] <- ggplot(data.frame(col_data), aes(x = col_data)) +
+    geom_histogram(breaks = numbarras, 
+                   color = "black", 
+                   fill = "darkgreen") +
+    labs(title = paste("Histograma de", col_name),
+         x = col_name,
+         y = "Frecuencia") +
+    theme_minimal()
+}
+#grafica cada histograma agrupados en un formato de 2x2
+grid.arrange(grobs = plots, ncol = 2)
+```
+
+>Observaciones resultantes:
+1.Ozone:
+-Distribución positivamente sesgada (cola larga a la derecha).
+-Posibles valores altos atípicos.
+2.Solar.R:
+-Distribución más simétrica, pero con posibles brechas o modas múltiples.
+3.Wind:
+.Posible distribución unimodal cerca de 10 mph.
+4.Temp:
+-Distribución relativamente normal, centrada alrededor de 75-80°F.
+
+
+---
+
+## Boxplots múltiples para visualizar la dispersión de las variables
+> Queremos visualizar de forma compacta la dispersión, la simetría y los valores extremos de la distribución. En este caso utilizaremos Boxplots para identificar patrones, detectar outliers y anticipar decisiones de modelado estadístico. 
+
+```{r}
+df_long <- pivot_longer(df, 
+                        cols = c(Ozone, Solar.R, Wind, Temp),
+                        names_to = "Variable", 
+                        values_to = "Valor")
+
+boxplots_list <- lapply(unique(df_long$Variable), function(var) {
+  ggplot(df_long %>% filter(Variable == var), aes(x = Variable, y = Valor, fill = Variable)) +
+    geom_boxplot() +
+    labs(title = paste("Boxplot de", var)) +
+    theme_minimal() +
+    theme(legend.position = "none")  # Ocultar leyenda individual
+})
+
+grid.arrange(grobs = boxplots_list,ncol = 2  
+)
+```
+
+> Como resultados vemos que:
+>
+- **Ozone:** mediana ≈ 31 ppb, IQR de 18–63 ppb, bigotes hasta 133 ppb y varios outliers por encima de este valor (máximo ≈ 168 ppb). Evidente asimetría hacia la derecha.
+- **Solar.R:** IQR entre 115–258 Ly, mediana ≈ 207 Ly, bigotes entre 7 y 334 Ly, sin atipicidad marcada. Gran dispersión contenida dentro del rango esperado.
+- **Wind:** mediana ≈ 9.7 mph, IQR 7.4–11.5 mph, bigotes entre 2.3–15.5 mph, pocos valores extremos. Distribución estable y casi simétrica.
+- **Temp:** mediana ≈ 79 °F, cuartiles entre 72–85 °F, bigotes entre 57–92.5 °F, sin outliers relevantes. Variación estrecha y homogénea.
+
+---
+
+## Resumen gráfico de los datos con summaryPlot
+
+>Para cada variable —**Temp**, **Wind**, **Solar.R** y **Ozone**— utilizaremos gráficos compuestos que integran:
+1. **Proporción de datos faltantes** (indicador visual).  
+2. **Serie diaria** representada como línea continua.  
+3. **Resumen estadístico**: media, mediana y percentil 95.  
+4. **Mini-histograma** de la distribución global.
+
+
+```{r}
+#Se crea una columna 'date' necesaria para utilizar el método 'summaryPlot
+#ésta contiene la fecha en formato YY-MM-DD'
+df$date <- as.Date(paste("1973", df$Month, df$Day, sep = "-"))
+
+summaryPlot(
+  df[,!names(df) %in% c("Day","Month")],
+  main = "Resumen de los datos"
+)
+```
+
+## Resultados
+
+- **Temp**  
+  - Tendencia: ascenso de ~60 °F en mayo a ~90 °F en julio, luego descenso hasta septiembre.  
+  - Distribución: casi normal; media = 77.8 °F, mediana = 79 °F, p95 = 92.5 °F.  
+
+- **Wind**  
+  - Patrón diario: ligeras fluctuaciones; vientos más suaves en junio–julio.  
+  - Distribución: casi simétrica; moda = 8–11 mph, mediana = 9.7 mph, p95 = 15.5 mph.  
+
+- **Solar.R**  
+  - Comportamiento: valores erráticos en primavera; mesetas altas en junio–julio.  
+  - Distribución bimodal: cúmulos en 0–50 Ly y 200–300 Ly; mediana = 207 Ly, p95 = 310 Ly.  
+
+- **Ozone**  
+  - Serie diaria: mayoritariamente 0–50 ppb con picos puntuales > 100 ppb en julio–agosto.  
+  - Distribución sesgada a la derecha; mediana = 31 ppb, p95 = 109 ppb.  
+
+## Discusión
+
+1. **Estacionalidad**: Temp y Solar.R alcanzan su punto máximo en julio; Wind muestra mínimos relativos en verano; Ozone replica la estacionalidad de Solar.R con mayor volatilidad.  
+2. **Variabilidad**: Solar.R presenta la dispersión más amplia, seguida de Ozone (cola larga) y, por último, Temp y Wind (rangos acotados).  
+3. **Bimodalidad y regímenes**: la doble moda de Solar.R y Ozone sugiere la existencia de dos estados climáticos (nublado vs. soleado; ventilado vs. estancado).  
+4.**Eventos extremos**: los picos de Ozone (> 100 ppb) y Wind (> 15 mph) identifican días de alta contaminación y rachas fuertes respectivamente.
+
+---
+
+## Regresión lineal: temperatura en función de los niveles de ozono
+>Retomando las correlaciones analizadas al inicio del trabajo, como pudimos observar que entre las variables Temp y Ozone existía una cor=0.698, es prácticamente fuerte. Ajustaremos un modelo de regresión lineal, nuestra hipótesis es que los valores de la temp pueden dependen de los niveles de ozono
+
+```{r}
+model <- lm(Temp ~ Ozone, data = df)
+cor(df$Temp,df$Ozone)
+```
+
+> Calculamos el resultado de la prueba R^2 para obtener que el 48% de la varianza del campo Temp se explica por Ozone
+
+
+---
+
+## Gráfico de dispersión con línea de regresión
+
+```{r}
+plot(df$Ozone, df$Temp, col = "blue",
+     xlab = "Niveles de Ozono", ylab = "Temperatura Máxima")
+abline(model, col = "red", lwd = 3)
+```
+
+> Se representa gráficamente la relación entre ozono y temperatura, junto con la recta del modelo ajustado para observar visualmente la tendencia.
+
+---
+
+## Realizando predicciones
+>Realizaremos una predicción usando el modelo antes creado, ubicando los valores en una matriz de 4 columnas donde:
+-fit: valor predicho
+-lwr: Límite inferior del intervalo
+-upr: Límite superior del intervalo
+
+```{r}
+#data frame que contiene valores a partir del valor máximo de Ozone hasta 200 con pasos entre ellos iguales a 2
+data_model  <- data.frame(Ozone = seq(max(df$Ozone), 200, by = 2))
+#calcula las predicciones para estos valores utilizando el modelo de regresión
+predict_model <- predict(model, newdata = data_model, interval = "prediction")
+#combina las columnas de data_model y predict_model
+results_model <- cbind(data_model, predict_model)
+results_model
+```
+>Con estos resultados se puede ver como a medida que aumenta el Ozono la temperatura crece hasta llegar a 109ºF, esto es mayor que la temperatura máxima registrada en Nueva York (106ºF en 1936). Por tanto continuemos analizando nuestro modelo para determinar su viabilidad utilizando el modelo de normalizacion Q-Q para ver si los residuos son normales.
+
+```{r}
+residuos_model <- residuals(model)#contiene los residuos del modelo
+#gráfica del modelo Q-Q con la linea de la norma
+qqnorm(residuos_model)
+qqline(residuos_model)
+#realizamos la prueba de Shapiro-Wilk para determinar el p-valor resultante
+shapiro.test(residuos_model)
+```
+
+>Al analizar el p- valor se puede concluir que el modelo es estadísticamente significativo,lo que sugiere una evidencia muy fuerte en contra de la hipótesis nula, por tanto la rechaza.
+
+---
+# Hipótesis y Comprensión Analítica Basada en el Análisis Exploratorio de Datos (AED)
+---
+## Hipótesis Central
+
+**"La interacción entre variables meteorológicas (temperatura, radiación solar y viento) en 1970 generó regímenes ambientales diferenciados, evidenciados por la bimodalidad en ozono y radiación solar, cuya comparación con datos actuales (por ejemplo 2024) permitiría cuantificar el impacto de factores antropogénicos en la calidad del aire".**
+
+---
+
+## Líneas de Investigación Derivadas del AED
+
+Todo lo que planteamos a continuación **es resultado directo del análisis detallado sobre los datos de 1970**. Fue ese análisis el que despertó la curiosidad científica por comparar patrones actuales y construir hipótesis sobre el presente. El verdadero mérito de este trabajo está en **cómo desde el pasado (1970), el AED nos ofrece una lente para entender el presente (2024)**.
+
+### 1. Transformación de Patrones (1970 vs. 2024)
+
+- **Teoría sobre Solar.R (2024)**: La clara bimodalidad observada en 1970 se ha convertido en una distribución multimodal en 2024, reflejando un mayor número de tipos de días: no solo soleados o nublados, sino también días con bruma por contaminación urbana, aerosoles de incendios forestales o nubosidad alterada por el cambio climático.
+
+- **Teoría sobre Ozone (2024)**: La cola derecha observada en 1970 (P95 = 109 ppb) se ha intensificado en 2024. Actualmente, se registran valores más frecuentes y severos (>150 ppb) en zonas urbanas densamente pobladas, debido a la acción combinada de fuentes antropogénicas como el tráfico, la industria, y las altas temperaturas asociadas al cambio climático.
+
+### 2. Mecanismos Subyacentes
+
+- **1970**: La formación de ozono troposférico estaba principalmente determinada por factores naturales como la radiación solar y la temperatura.
+
+- **2024**: Se ha detectado un cambio de régimen: a los factores naturales se suman nuevas fuentes humanas (emisiones industriales, tráfico vehicular, quema de combustibles fósiles), lo cual ha alterado profundamente las relaciones observadas en 1970.
+
+---
+
+
+# Conclusión
+
+El trabajo demuestra cómo un AED bien estructurado puede ir más allá de lo descriptivo y convertirse en una herramienta para **generar hipótesis, motivar líneas de investigación y contextualizar fenómenos ambientales contemporáneos**. Además, destaca la importancia de la visualización, el uso de métricas robustas como el percentil 95 y la integración de distintas variables para identificar fenómenos multicausales.
+
+Finalmente, este estudio reafirma el valor del análisis exploratorio como una etapa clave en cualquier investigación científica basada en datos. La habilidad de traducir datos en preguntas relevantes y patrones significativos es lo que define la calidad de un analista de datos, y este proyecto ha sido una muestra de ese enfoque crítico, riguroso y reflexivo.
+
+
