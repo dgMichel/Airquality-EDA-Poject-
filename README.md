@@ -7,10 +7,10 @@
 
 Este repositorio contiene el resultado del **trabajo final del curso de Análisis Exploratorio de Datos**, en la carrera de Ciencia de Datos.  
 El proyecto se basa en el análisis de la base de datos `airquality`, incluida en R Studio, que proporciona observaciones diarias sobre variables meteorológicas y calidad del aire.
-Guarda lecturas diarias de los valores de la calidad del aire en el período de 1-5-1973 a 30-9-1973. Las variables contenidas en la base de datos son:
--Ozone: Ozono medio en partes por mil millones entre las 13.00 y las 15.00 horas en Roosevelt Island
--Solar.R: Radiación solar en Langleys en la banda de frecuencia 4000–7700 Angstroms de 08:00 a 12:00 horas en Central Park
--Wind: Velocidad media del viento en millas por hora a las 07:00 y a las 10:00 horas en el Aeropuerto LaGuardia
+Guarda lecturas diarias de los valores de la calidad del aire en el período de 1-5-1973 a 30-9-1973. Las variables contenidas en la base de datos son:  
+-Ozone: Ozono medio en partes por mil millones entre las 13.00 y las 15.00 horas en Roosevelt Island  
+-Solar.R: Radiación solar en Langleys en la banda de frecuencia 4000–7700 Angstroms de 08:00 a 12:00 horas en Central Park  
+-Wind: Velocidad media del viento en millas por hora a las 07:00 y a las 10:00 horas en el Aeropuerto LaGuardia  
 -Temp: Temperatura máxima diaria en grados Fahrenheit en el Aeropuerto LaGuardia.
 
 ---
