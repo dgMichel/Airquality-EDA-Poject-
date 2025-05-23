@@ -1,3 +1,6 @@
+<h2 align="center">
+    <img alt="Logo-R" src="https://adamslab.nl/wp-content/uploads/2019/04/R_logo.svg_.png" width="200px" height="200px" />
+  
 # ANÁLISIS EXPLORATORIO DE DATOS: CALIDAD DEL AIRE CON R STUDIO
 
 ### Proyecto Final — Ciencia de Datos  
